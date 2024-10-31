@@ -1,0 +1,11 @@
+PyYAML
+requests
+attrs
+joblib
+cloudpickle
+openpyxl
+pandas
+matplotlib
+plotly
+ipykernel
+funpy @ git+https://github.com/GeoMop/funpy@main

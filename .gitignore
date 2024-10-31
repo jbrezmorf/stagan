@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+stagan/joblib_cache
+**/stag_ticket_user.json
+
 # C extensions
 *.so
 
