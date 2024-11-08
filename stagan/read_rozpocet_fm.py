@@ -1,10 +1,19 @@
+import attrs
 import pandas as pd
 from pathlib import Path
 import re
 
 script_dir = Path(__file__).parent
 
-def process_excel_file(filename):
+@attrs.define
+class RozpocetCols:
+    predmet: int = 0
+    pr_hodin: int = 1
+    cv_hodin: int = 2
+    n_kruhu: int = 3
+    hodino_body: int = 4
+
+def process_excel_file(filename, cols: RozpocetCols):
     # Read the Excel file, sheet '5_Výuka'
     df = pd.read_excel(filename, sheet_name='5_Výuka', header=None)
     # Initialize variables
@@ -44,7 +53,7 @@ def process_excel_file(filename):
 
 
         # Skip rows like 'I. ročník'
-        first_cell = str(row[0]).strip()
+        first_cell = str(row[cols.predmet]).strip()
         if re.match(r'^[IVX]+\.\s*ročník', first_cell):
             continue  # Skip this row
 
@@ -55,7 +64,7 @@ def process_excel_file(filename):
         # Process regular data rows
         # Extract 'predmet' from the first column (subject description)
         subject_desc = first_cell
-        match = re.search(r'\b([A-Z]+)\b', subject_desc)
+        match = re.search(r' \b([A-Z][-A-Z0-9/*]*)\b', subject_desc)
         if match:
             predmet = match.group(1)
         else:
@@ -63,19 +72,14 @@ def process_excel_file(filename):
 
         # Extract the required columns based on the positions in 'column_positions'
         try:
-            pr_hodin = row[column_positions.get('Počet hodin přednášek za celý semestr')]
-            cv_hodin = row[column_positions.get('Počet hodin cvičení za celý semestr')]
-            n_kruhu = row[column_positions.get('Počet kroužků ke cvičení ze STAGu')]
-            hodino_body = row[column_positions.get('Body celkem')]
-
             # Append the processed data to the list
             data_rows.append({
                 'katedra': katedra,
                 'predmet': predmet,
-                'pr_hodin': pr_hodin,
-                'cv_hodin': cv_hodin,
-                'n_kruhu': n_kruhu,
-                'hodino_body': hodino_body
+                'pr_hodin': row[cols.pr_hodin],
+                'cv_hodin': row[cols.cv_hodin],
+                'n_kruhu': row[cols.n_kruhu],
+                'hodino_body': row[cols.hodino_body]
             })
         except (IndexError, TypeError, KeyError):
             # Handle rows that don't have enough columns or missing columns

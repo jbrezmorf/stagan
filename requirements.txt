@@ -1,11 +1,17 @@
 PyYAML
 requests
 attrs
+tqdm        # progress bar
 joblib
 cloudpickle
 openpyxl
 pandas
+seaborn
 matplotlib
 plotly
 ipykernel
+reportlab
+weasyprint
+markdown
+svglib
 funpy @ git+https://github.com/GeoMop/funpy@main

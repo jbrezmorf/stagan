@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+stagan/workdir
 stagan/joblib_cache
 **/stag_ticket_user.json
 
