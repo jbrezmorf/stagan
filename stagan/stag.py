@@ -13,10 +13,12 @@ import numpy as np
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 from tqdm import tqdm
-from KENs import KENs
+from tables import KENs
 
 #from funpy import memoize, MemoizeCfg
 import pathlib
+
+
 script_dir = pathlib.Path(__file__).parent
 workdir = script_dir / "workdir"
 #MemoizeCfg.instance(cache_dir=script_dir / "funpy_cache")
@@ -159,24 +161,6 @@ class STAG:
 def stag_call(stag, req):
     return stag.call_api(req)
 
-def pretty_print_yaml(data, fname=None):
-    """
-    Pretty prints a hierarchy of lists and dicts using YAML formatting.
-
-    Args:
-        data (dict or list): The hierarchical data to print.
-    """
-    # Dump the data to YAML format with indentation and default_flow_style off (for multiline format)
-
-    if fname is None:
-        print(yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False))
-    else:
-        workdir.mkdir(parents=True, exist_ok=True)
-        with open(workdir / fname, 'w') as f:
-            if isinstance(data, pd.DataFrame):
-                f.write(data.to_string(index=True))
-            yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-
 
 def akreditace_year(date: Dict[str, str]):
     if date is None:
@@ -208,7 +192,7 @@ def initialize_from_dict(cls, *dicts):
     except TypeError as e:
         print(e)
         print("Input Dict:")
-        pretty_print_yaml(list(dicts))
+        #pretty_print_yaml(list(dicts))
         return None
     return (instance.idx(), instance)
 
@@ -348,13 +332,35 @@ class VyukaPr:
         return b
 
     def body(self):
-        b = self._body_calc()
+
         if self._body is None:
+            b = self._body_calc()
             return b
         else:
-            assert b == self._body, repr(self)
+            #assert b == self._body, repr(self)
             return self._body
 
+    @property
+    def array(self):
+        return np.array([self.n_hodin_pr, self.n_hodin_cv, self.n_hodin_sem, self.n_kruh, self.body()])
+
+    def to_prefixed_dict(self, prefix: str) -> dict:
+        """
+        Returns a dictionary of the class attributes with keys prefixed by the given prefix string.
+
+        :param prefix: The prefix string to add to each attribute name.
+        :return: A dictionary with prefixed attribute names and their corresponding values.
+        """
+        d = {
+            f"{prefix}{field.name}": getattr(self, field.name)
+            for field in attrs.fields(self.__class__)
+        }
+        d[f"{prefix}_body"] = self.body()
+        return d
+
+i_ra_prednaska = 0
+i_ra_cviceni = 1
+i_ra_seminar = 2
 
 @attrs.define
 class Predmet:
@@ -374,55 +380,24 @@ class Predmet:
     koefEkonomickeNarocnosti: float = attrs.field(converter=float)
 
     # agregated
-    vyuka_rozpocet: VyukaPr = None
+    #vyuka_rozpocet: VyukaPr = None
 
-    students: Set[str] = attrs.field(factory=set)   # osobni cisla studentu
-    cvika: Set[Any] = attrs.field(factory=set)         # rozvrhove akce cvik
-    prednasky: Set[Any] = attrs.field(factory=set)         # rozvrhove akce prednacek
-    seminare: Set[Any] = attrs.field(factory=set)         # rozvrhove akce seminaru
-
-    @property
-    def label(self):
-        return f"{self.katedra}/{self.zkratka}"
-
-    @property
-    def vyuka_stag(self) -> VyukaPr:
-        return VyukaPr(self.n_hodin_prednaska(), self.n_hodin_cvika(), self.n_hodin_sem(),
-                       self.n_paralel_cv(), None)
-
-    def vazeny_studento_kredit(self, fakulty_KEN):
-        return self.n_students * self.kreditu * fakulty_KEN[self.fakulta_programu]
-
-    def n_hodin(self):
-        n_hod_cv: int = 0
-        n_hod_pr: int = 0
 
     def idx(self):
         # Účtování předmětů je po jednotlivých programech
         return (self.rok, self.katedra, self.zkratka, self.stprIdno)
 
-    @cached_property
-    def n_students(self):
-        return len(self.students)
+
+    @property
+    def label(self):
+        return f"{self.katedra}/{self.zkratka}"
 
     @cached_property
     def rozsah_tuple(self):
         return tuple([i for i in self.rozsah.split('+')])
 
-    def _n_hodin(self, set_akci, dotace):
-        n_per_tyd = {'K': 2, 'L':1, 'S':1, 'J':0}
-        tydny_sum = {akce[1:] for akce in set_akci}
-        assert len(tydny_common) == 1
-        od, do, tydenZkr = list(tydny_common)[0]
-        n_tydnu = do - od + 1
 
-        return [akce[0] for akce in set_akci], tydny_common, dotace
 
-    def n_hodin_cvika(self):
-        return self._n_hodin(self.cvika, self.rozsah_tuple[1])
-
-    def n_hodin_prednaska(self):
-        return self._n_hodin(self.prednasky, self.rozsah_tuple[0])
 
 PredmetIdx = Tuple[int, str, str, int]
 
@@ -459,7 +434,7 @@ def get_predmety(stag_client, obory:List[StudijniObor], roky: List[int]):
                 request = GetPredmetyByOborRequest(obor.oborIdno, rok)
                 predmety_res = stag_call(stag_client, request)['predmetOboru']
                 predmet_add = [initialize_from_dict(Predmet, predmet, obor, {'fakulta_programu': obor.fakulta}) for predmet in predmety_res]
-                pretty_print_yaml(predmet_add, fname=f'predmety_{rok}_{obor.oborIdno}.yaml')
+                #pretty_print_yaml(predmet_add, fname=f'predmety_{rok}_{obor.oborIdno}.yaml')
                 extend_valid(predmety, predmet_add)
     return dict(predmety)
 
@@ -476,6 +451,10 @@ class RozvrhovaAkce:
     tydenZkr: str       # K (Každý), S (sudý), L (lichý), J (Jiný, kombinované)
     tydny: Tuple[int, int]      # Od, Do
     krouzky: str
+
+    def __hash__(self):
+        return self.roakIdno
+
 
     def idx(self):
         return self.roakIdno
@@ -513,6 +492,129 @@ class GetRozvrhByKatedraRequest:
 def tydny_guess(ra):
     pair = (ra['tydenOd'], ra['tydenDo'])
     return {'tydny': pair}
+
+
+
+@attrs.define
+class PredmetAkce:
+    """
+    Combine Predmet and RozvrhovaAkce and student ids.
+    """
+    rok: int
+    katedra: str
+    zkratka: str
+    _predmety: Dict[PredmetIdx, Predmet] = attrs.field(repr=False, init=False)
+    students: Dict[int, Set[str]]
+    akce: List[Dict[str, Any]] = attrs.field(factory=lambda : [{}, {}, {}])  # rozvrhove akce
+    n_per_tyd = {'K': 2, 'L': 1, 'S': 1, 'J': 0}
+    ra_types = ['Př', 'Cv','Sem']
+    ra_types_resolve = {ra_type: i for i, ra_type in enumerate(ra_types)}
+
+    @property
+    def label(self):
+        return f"{self.katedra}/{self.zkratka}"
+
+    def predmet(self, prog_id):
+        return self._predmety[(self.rok, self.katedra, self.zkratka, prog_id)]
+
+    @property
+    def predmety(self):
+        return (self.predmet(prog_id) for prog_id in self.students.keys())
+
+    def vazeny_studento_kredit(self, prg_id, fakulty_KEN):
+        n_students = len(self.students[prg_id])
+        predmet = self.predmet(prg_id)
+        return n_students * predmet.kreditu * fakulty_KEN[predmet.fakulta_programu]
+
+    def union_students(self, prog_id, students):
+        self.students[prog_id] = self.students[prog_id].union(students)
+
+    def add_ra(self, ra: 'RozvrhovaAkce'):
+        i_ra_type = self.ra_types_resolve[ra.typAkceZkr]
+        ra_dict = self.akce[i_ra_type]
+        ra_dict.setdefault(ra.krouzky, set())
+        ra_dict[ra.krouzky].add(ra)
+
+    @cached_property
+    def rozsah_tuple(self):
+        rozsah_set = {p.rozsah_tuple for p in self.predmety}
+        assert len(rozsah_set) == 1
+        return next(iter(rozsah_set))
+
+    def _n_hodin(self, i_ra_type):
+        """
+        Check consistency, return:
+        number of parallel actions of sam type in week,
+        number of unique hours of action par week,
+        number of weeks
+        """
+        rozsah = self.rozsah_tuple[i_ra_type]
+        try:
+            rozsah = int(rozsah)
+        except ValueError:
+            print(f"{self.label}, akce: {self.ra_types[i_ra_type]}, rozsah: {rozsah}")
+            rozsah = 0
+
+        akce = self.akce[i_ra_type]
+        n_parallel = len(akce)
+        if n_parallel == 0:
+            return 0, 0, 0
+
+        count_ra = lambda ra_set: sum(self.n_per_tyd[ra.tydenZkr] for ra in ra_set)
+        akce_rozsah = {krouzky: count_ra(ra_set) for krouzky, ra_set in akce.items()}
+        if akce_rozsah.values():
+            rozsah_min = min(akce_rozsah.values())
+            rozsah_max = max(akce_rozsah.values())
+            if (rozsah_min != rozsah_max) or (rozsah_min != rozsah):
+                print(f"{self.label}, akce: {self.ra_types[i_ra_type]}," +
+                 f" inconsistent rozsah {rozsah} != (min: {rozsah_min}, max: {rozsah_max})")
+        else:
+            assert rozsah == 0, \
+                (f"{self.label}({self.rok}), akce: {self.ra_types[i_ra_type]}," +
+                 f" inconsistent rozsah {rozsah} != 0")
+            rozsah = 0
+
+        def count_tydny(ra):
+            count = ra.tydny[1] - ra.tydny[0]
+            if count < 0:
+                count += 52
+            return count + 1
+        all_akce = [ra  for kruhy_akce in akce.values() for ra in kruhy_akce]
+        n_tydny = [count_tydny(ra) for ra in all_akce]
+        if len(n_tydny) > 0:
+            min_n_tydny = min(n_tydny)
+            max_n_tydny = max(n_tydny)
+            if  min_n_tydny != max_n_tydny:
+                print(f"{self.label}({self.rok}), akce: {self.ra_types[i_ra_type]}," + \
+                        f" inconsitent tydny: (min: {min_n_tydny}, max: {max_n_tydny})")
+            n_tydnu = max_n_tydny
+        else:
+            n_tydnu = 0
+        return n_parallel, rozsah, n_tydnu
+
+    @property
+    def n_students(self):
+        return sum((len(s) for s in self.students.values()))
+
+    @property
+    def vyuka_stag(self) -> VyukaPr:
+        par_pred, rozsah_pred, weeks_pred = self._n_hodin(0)
+        par_cv, rozsah_cv, weeks_cv = self._n_hodin(1)
+        par_sem, rozsah_sem, weeks_sem = self._n_hodin(2)
+        if par_sem > 0:
+            assert par_sem == 1
+            assert weeks_pred == 0 and weeks_cv == 0
+            assert rozsah_sem >0 and weeks_sem > 0
+        else:
+            if (par_pred > 0) and (par_cv > 0):
+                if weeks_pred != weeks_cv:
+                    print(f"{self.label}({self.rok}), weeks_pr {weeks_pred} != weeks_cv {weeks_cv}")
+        return VyukaPr(rozsah_pred * weeks_pred, rozsah_cv * weeks_cv, rozsah_sem * weeks_sem,
+                       par_cv, None)
+
+
+
+
 
 @mem.cache
 def get_rozvrh(stag_client, katedry: List[str], years: List[int]) -> Dict[int, RozvrhovaAkce]:
@@ -557,37 +659,18 @@ def check_one(set_in):
     assert len(set_in) == 1, f"Non unique set: {set_in}"
     return list(set_in)[0]
 
-#
-# def get_studenti(stag_client, akce: Dict[int, RozvrhovaAkce], predmety: Dict[PredmetIdx, Predmet], programy: Dict[int, StudijniProgram]):
-#     missing_predmety = set()
-#     for ra in tqdm(akce.values()):
-#         studenti_req = GetStudentiByRoakceRequest(roakIdno=str(ra.roakIdno))
-#         studenti = stag_call(stag_client, studenti_req)['studentPredmetu']
-#         studenti:List[Tuple[int, Student]] = [initialize_from_dict(Student, s) for s in studenti]
-#         for _, s in studenti:
-#             predmet_idx = (ra.rok, ra.katedra, ra.predmet, int(s.stprIdno))
-#             try:
-#                 predmety[predmet_idx].students.add(s.osCislo)
-#             except KeyError:
-#                 missing_predmety.add(predmet_idx)
-#                 continue
-#
-#             if ra.typAkceZkr == 'Cv':
-#                 predmety[predmet_idx].cvika.add((ra.roakIdno, *ra.tydny, ra.tydenZkr))
-#             elif ra.typAkceZkr == 'Př':
-#                 predmety[predmet_idx].prednasky.add((ra.roakIdno, *ra.tydny, ra.tydenZkr))
-#             elif ra.typAkceZkr == 'Se':
-#                 predmety[predmet_idx].seminare.add((ra.roakIdno, *ra.tydny, ra.tydenZkr))
-#             else:
-#                 print(f"Unsupported typAkceZkr: {ra.typAkceZkr}, {ra.roakIdno} ")
-#
-#     for p in missing_predmety:
-#         print(f"RA pro chybějící Předmět oboru : {p}")
-
 
 def get_studenti(stag_client, akce: Dict[int, RozvrhovaAkce],
-                 predmety: Dict[PredmetIdx, Predmet],
-                 programy: Dict[int, StudijniProgram]):
+                 predmety: Dict[PredmetIdx, Predmet]):
+
+    predmety_ = {}
+    for r,k,z,p in predmety.keys():
+        predmety_.setdefault( (r,k,z), set()).add(p)
+    def dict_from_set(programs: Set[int]) -> Dict[int, Set[Any]]:
+        return {prg_id: set() for prg_id in programs}
+    predmety_akce = {(r,k,z): PredmetAkce(r, k, z, predmety, dict_from_set(prg_set))
+                     for (r,k,z), prg_set in predmety_.items()}
+
     missing_predmety = set()
     predmety_lock = Lock()
     missing_predmety_lock = Lock()
@@ -609,29 +692,24 @@ def get_studenti(stag_client, akce: Dict[int, RozvrhovaAkce],
             loc_prg_students.add(s.osCislo)
 
         for stprIdno, students in loc_prg_predmet.items():
-            predmet_idx = (ra.rok, ra.katedra, ra.predmet, int(stprIdno))
+            predmet_akce_idx = (ra.rok, ra.katedra, ra.predmet)
+            prg_id = int(stprIdno)
             with predmety_lock:
-                if predmet_idx in predmety:
-                    predmet = predmety[predmet_idx]
-                else:
-                    local_missing_predmety.add(predmet_idx)
+                try:
+                    predmet_akce = predmety_akce[predmet_akce_idx]
+                except KeyError:
+                    local_missing_predmety.add(predmet_akce_idx)
                     continue
-
-                predmet.students = predmet.students.union(students)
-                if ra.typAkceZkr == 'Cv':
-                    predmet.cvika.add((ra.roakIdno, *ra.tydny, ra.tydenZkr))
-                elif ra.typAkceZkr == 'Př':
-                    predmet.prednasky.add((ra.roakIdno, *ra.tydny, ra.tydenZkr))
-                elif ra.typAkceZkr == 'Se':
-                    predmet.seminare.add((ra.roakIdno, *ra.tydny, ra.tydenZkr))
-                else:
-                    print(f"Unsupported typAkceZkr: {ra.typAkceZkr}, {ra.roakIdno}")
+                predmet_akce.union_students(prg_id, students)
+                predmet_akce.add_ra(ra)
+                # except KeyError:
+                #     print(f"Unsupported typAkceZkr: {ra.typAkceZkr}, {ra.roakIdno}")
 
         with missing_predmety_lock:
             missing_predmety.update(local_missing_predmety)
 
     # Use ThreadPoolExecutor to process requests concurrently
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=1) as executor:
         futures = {executor.submit(process_ra, ra): ra for ra in akce.values()}
         for future in tqdm(as_completed(futures), total=len(futures), desc="Processing akce"):
             pass  # We're handling everything within process_ra
@@ -643,21 +721,9 @@ def get_studenti(stag_client, akce: Dict[int, RozvrhovaAkce],
     for p in missing_predmety:
         print(f"RA for missing Predmet oboru: {p}")
 
+    return predmety_akce
 
-#@mem.cache
-def students_on_programs(predmety):
-    # sum n_students to StudijniProgram
-    rok_program_students = {}
-    for p in predmety.values():
-        idx = (p.rok, p.stprIdno)
-        prg_st_set = rok_program_students.setdefault(idx, set())
-        rok_program_students[idx] = prg_st_set.union(p.students)
 
-    rps={}
-    for (rok, prg_id), students in rok_program_students.items():
-        prg_n_students = rps.setdefault(rok, {})
-        prg_n_students[prg_id] = len(students)
-    return rps
 
 @mem.cache
 def read_stag(years, katedry=None):
@@ -674,10 +740,11 @@ def read_stag(years, katedry=None):
     #print(hashlib.sha256(cloudpickle.dumps(attrs.evolve(stag_client))).hexdigest())
 
     programy  = studijni_programy(stag_client)
-    pretty_print_yaml(programy, fname='programy.yaml')
     obory = studijni_obory(stag_client, list(programy.values()), years)
-    pretty_print_yaml(obory, fname='obory.yaml')
+    #pretty_print_yaml(obory, fname='obory.yaml')
     predmety = get_predmety(stag_client, list(obory.values()), years)
+    # remove CDV (univerzita tretiho veku)
+    predmety = {k: v for k, v in predmety.items() if v.fakulta_programu != 'CDV'}
     if katedry is None:
         katedry = {p.katedra for p in predmety.values()}
     print(len(predmety))
@@ -687,233 +754,5 @@ def read_stag(years, katedry=None):
     #print(krouzky_kod)
 
     # update 'n_students, n_cv, n_pr' in Predmety
-    get_studenti(stag_client, rozvrhove_akce, predmety, programy)
-    pretty_print_yaml(predmety, fname='predmety.yaml')
-    return predmety, programy
-
-#@mem.cache
-def read_rozpocet(year):
-    from read_rozpocet_fm import process_excel_file, RozpocetCols
-    cols = {
-        2019: RozpocetCols(0, 1, 2, 3, 7),
-        2020: RozpocetCols(0, 1, 2, 3, 7),
-        2021: RozpocetCols(0, 1, 2, 3, 7),
-        2022: RozpocetCols(0, 1, 2, 3, 7),
-        2023: RozpocetCols(0, 1, 2, 3, 7),
-        2024: RozpocetCols(0, 2, 3, 4, 8)
-    }
-    filename = script_dir.parent / 'dokumenty' / f'RozpFM_{year}.xlsx'
-    rozpocet_df = process_excel_file(filename, cols[year])
-    rozpocet_df.set_index(['katedra', 'predmet'], inplace=True)
-    rozpocet_df.sort_index(level=['katedra', 'predmet'], inplace=True)
-    return rozpocet_df
-
-def years_range(df):
-    min_year = min(df['rok'])
-    max_year = max(df['rok'])
-    if min_year == max_year:
-        years = str(min_year)
-    else:
-        years = str(min_year)[2:] + "-" + str(max_year)[2:]
-    return years
-
-
-# Example usage
-if __name__ == "__main__":
-    import warnings
-    warnings.filterwarnings("ignore", message="indexing past lexsort depth may impact performance")
-
-    # TODO: celá TUL z Clari24
-    fakulta_katedry = {k:'FM' for k in ['ITE', 'MTI', 'NTI']}
-
-    years = [2021, 2022, 2023, 2024]
-    plot_katedry = ['NTI', 'MTI', 'ITE']
-
-    predmety, programy = read_stag(years, katedry=None)
-    predmety = { k: p  for k, p in predmety.items()
-                if p.fakulta_programu != 'CDV'}
-    rok_program_students = students_on_programs(predmety)
-
-
-    rozpocet_df = { year: read_rozpocet(year) for year in years}
-    for year, df in rozpocet_df.items():
-        pretty_print_yaml(df.copy().reset_index().to_dict(orient='records'), fname=f'rozpocet_{year}.yaml')
-    missing_in_rozpocet =  set()
-    for p in predmety.values():
-        if len(p.cvika) + len(p.prednasky) + len(p.seminare) == 0:
-            continue
-        if p.katedra in plot_katedry:
-            pr_hodin = 0
-            cv_hodin = 0
-            n_kruhu = 0
-            hodino_body = 0
-            try:
-                row = rozpocet_df[int(p.rok)].loc[(p.katedra, p.zkratka)]
-                pr_hodin = row['pr_hodin'].astype(int).sum()
-                cv_hodin = row['cv_hodin'].astype(int).sum()
-                n_kruhu = row['n_kruhu'].astype(int).sum()
-                hodino_body = row['hodino_body'].astype(float).sum()
-                # Některé předměty jsou učeny pro různé obory jako samostatné přednášky (ITE/PZS a ITE/UZO)
-            except KeyError as e:
-                missing_in_rozpocet.add((p.katedra, p.zkratka, p.rok, f"cv: {len(p.cvika)}, pr: {len(p.prednasky)}, sem: {len(p.seminare)}"))
-                print(f"Missing in rozpocet: {p.katedra} / {p.zkratka}: cv: {len(p.cvika)}, pr: {len(p.prednasky)}, sem: {len(p.seminare)}")
-            except ValueError as e:
-                print(f"Value error in rozpocet: {p.katedra}, {p.zkratka}")
-            p.vyuka_rozpocet = VyukaPr(pr_hodin, cv_hodin, 0, n_kruhu, hodino_body)
-    pretty_print_yaml(missing_in_rozpocet, fname='missing_in_rozpocet.yaml')
-
-    katedra_faculty_dict = dict([
-        ("KMP", 2), ("KSP", 2), ("KMT", 2), ("KEZ", 2), ("KKY", 2), ("KST", 2), ("KOM", 2), ("KVM", 2), ("KSR", 2),
-        ("KTS", 2), ("KVS", 2), ("DFS", 2), ("KPE", 3), ("KIN", 3), ("KSY", 3), ("KFÚ", 3), ("KMG", 3), ("KCJ", 3),
-        ("KEK", 3), ("KPO", 3), ("DFE", 3), ("KTT", 4), ("KMI", 4), ("KHT", 4), ("KOD", 4), ("KNT", 4), ("KDE", 4),
-        ("DFT", 4), ("KFL", 5), ("KPP", 5), ("KMD", 5), ("KSS", 5), ("KCH", 5), ("KFY", 5), ("KRO", 5), ("KAP", 5),
-        ("KGE", 5), ("KPV", 5), ("KRO", 5), ("KHI", 5), ("KAJ", 5), ("KTV", 5), ("KNJ", 5), ("KCL", 5), ("DFP", 5),
-        ("CPP", 5), ("KVU", 6), ("KPS", 6), ("KNK", 6), ("KUR", 6), ("KAR", 6), ("KDA", 6), ("KED", 6), ("DFA", 6),
-        ("ITE", 7), ("MTI", 7), ("NTI", 7), ("DFM", 7), ("UZS", 8)
-    ])
-    facoulty_abr = {
-        2: "FS",   # Fakulta strojní
-        3: "FE",   # Ekonomická fakulta
-        4: "FT",   # Fakulta textilní
-        5: "FP",   # Fakulta přírodovědně-humanitní a pedagogická
-        6: "FA",   # Fakulta umění a architektury
-        7: "FM",   # Fakulta mechatroniky, informatiky a mezioborových studií
-        8: "FZS"   # Fakulta zdravotnických studií
-    }
-
-    sum_program_kredity = {}
-    normovanany_studenti = {}
-    predmety_podily_fakult = {}
-    for year in years:
-        prog_n_students = rok_program_students[year]
-        # Compute average KEN of programs of each facoulty, weighted by students on a program
-        fakulty_KEN = {}
-        for f in facoulty_abr.values():
-            KEN_students = [(p.koefEkonomickeNarocnosti, ns)
-                            for p, ns in zip(programy.values(), prog_n_students)
-                            if p.fakulta == f]
-            KEN, N = zip(*KEN_students)
-            fakulty_KEN[f] = float(np.average(KEN, weights=N))
-        print(f"[{year}] fakulty KEN:", fakulty_KEN)
-
-        sum_studento_kredity = {}
-        for p in predmety.values():
-            if not p.rok == year:
-                continue
-            if p.fakulta_programu == 'CDV':
-                continue
-            katedro_program = (p.katedra, p.stprIdno)
-            sum_studento_kredity.setdefault(katedro_program, 0)
-            sum_studento_kredity[katedro_program] += p.vazeny_studento_kredit(fakulty_KEN)
-            predmet_tag = p.label
-            podily_predmetu = predmety_podily_fakult.setdefault(predmet_tag, {})
-            cilova_fakulta = programy[p.stprIdno].fakulta
-            podily_predmetu.setdefault(cilova_fakulta, 0.0)
-            podily_predmetu[cilova_fakulta] += float(p.vazeny_studento_kredit(fakulty_KEN))
-
-        # Sum studento_kredity for each program, that is for katedro_program[1]
-        spk = sum_program_kredity.setdefault(year, {})
-        for (k, p), v in sum_studento_kredity.items():
-            spk.setdefault(p, 0)
-            spk[p] += v
-
-        norm_stud = normovanany_studenti.setdefault(year, {})
-        for prg_id, ns in prog_n_students.items():
-            norm_stud[prg_id] = ns * fakulty_KEN[programy[prg_id].fakulta]
-
-        # print programm codes and n_students
-        skp = {(k, programy[i_pr].kod): float(sk) for (k , i_pr), sk in sum_studento_kredity.items()}
-        pretty_print_yaml(skp, fname=workdir / f"studento_kredity_{year}.yaml")
-        programy_n_students = {programy[prg_id].kod: ns for prg_id, ns in prog_n_students.items()}
-        pretty_print_yaml(programy_n_students, fname=workdir / f"programy_n_students_{year}.yaml")
-        norm_prog_students = {programy[prg_id].kod: float(ns) for prg_id, ns in norm_stud.items()}
-        pretty_print_yaml(norm_prog_students, fname=workdir / f"norm_students_{year}.yaml")
-    # Fill a dataframe for predmety having columns:
-    # f"{p.katedra}/{p.zkratka}",
-    # p.rok,
-    # rel_prijmy = p.vazeny_studento_kredit(fakulty_KEN) / sum_program_kredity[p.stprIdno] * normovany_studenti
-    # rel_naklady= p.vyuka_rozpocet.body()
-    pretty_print_yaml(predmety_podily_fakult, fname=workdir / "predmety_podily_fakult.yaml")
-
-    df_data = []
-    for p in predmety.values():
-        if p.katedra in plot_katedry:
-            if p.vyuka_rozpocet is None:
-                 continue
-
-            try:
-                stud_kredit = p.vazeny_studento_kredit(fakulty_KEN)
-                prog_norm_stud = normovanany_studenti[p.rok][p.stprIdno]
-                sum_stud_kredit = sum_program_kredity[p.rok][p.stprIdno]
-                #rel_prijmy = rel_prijmy_vaha * normovanany_studenti[p.rok][p.stprIdno]
-                rel_naklady = p.vyuka_rozpocet.body()
-            except AssertionError:
-                print(f"{p.katedra}/{p.zkratka} : Rozdíl v bodech: {p.vyuka_rozpocet._body} != {p.vyuka_rozpocet._body_calc()}")
-                rel_naklady = p.vyuka_rozpocet._body
-            program: StudijniProgram = programy[p.stprIdno]
-            df_data.append([p.label, p.katedra, p.zkratka, p.rok, p.n_students, stud_kredit, rel_naklady,
-                            sum_stud_kredit, prog_norm_stud, program.koefEkonomickeNarocnosti, program.kod, program.stprIdno,
-                            f"{p.fakulta_programu:>3}"])
-
-    # dataframe for programo_predmet
-    df = pd.DataFrame(df_data, columns=["label", "katedra", "zkratka", "rok", "n_students", 'stud_kredit', "rel_naklady",
-                                        "sum_stud_kredit", "prog_norm_stud", "prg_KEN", "program", "prog_id" ,'fakulta_program'])
-    df['prijmy_vaha'] = df['stud_kredit'] / df['sum_stud_kredit']
-    df['rel_prijmy'] = df['prijmy_vaha'] * df['prog_norm_stud']
-    df.set_index(["katedra", "zkratka", "rok"], inplace=True)
-    df.sort_values('label', inplace=True)
-    pretty_print_yaml(df, fname=workdir / "vyuka_eff_split.csv")
-
-
-
-    # aggregate all programs of predmet to single item
-    def check_common_value(series):
-        if series.nunique() == 1:
-            return series.iloc[0]
-        else:
-            return '+'.join((str(it) for it in series))  # Indicator for differing values
-    df.reset_index()
-
-
-    # def custom_agg(sub_df):
-    #     # if len(sub_df['fakulta_program'].unique()) > 1:
-    #     #     # Get the fakulta_program with maximum n_students
-    #     #     fakulta_groups=sub_df.groupby('fakulta_program')['n_students'].sum()
-    #     #     max_program = fakulta_groups.idxmax()
-    #     # else:
-    #     #     max_program = sub_df.iloc[0]['fakulta_program']
-    #
-    #     sum = lambda x : x.sum()
-    #     agg_ops = dict(
-    #         n_students=sum,
-    #         rel_prijmy=sum,
-    #         rel_naklady=check_common_value,
-    #         label=check_common_value)
-    #         #katedra=check_common_value,
-    #         #zkratka=check_common_value)
-    #
-    #     res_dict = {col: op(sub_df[col]) for col, op in agg_ops.items()}
-    #     # res_dict['fakulta_program'] = max_program
-    #     # Return a Series with custom aggregated results
-    #     return pd.Series(res_dict)
-    # # Group by index and apply the custom aggregation function
-    # aggregated_df = df.groupby(level=df.index.names).apply(custom_agg)
-
-    agg_functions = {'n_students': 'sum',
-                     'rel_prijmy': 'sum',
-                     'rel_naklady': check_common_value,
-                     'label': check_common_value,
-                     }
-    aggregated_df = df.groupby(level=df.index.names).agg(agg_functions)
-
-
-    pretty_print_yaml(aggregated_df, fname=workdir / "vyuka_eff.csv")
-    aggregated_df.reset_index(inplace=True)
-
-
-    y_range = years_range(aggregated_df)
-    from vyuka_plot import plot_vyuka_df
-    svg_plot = plot_vyuka_df(aggregated_df, predmety_podily_fakult, pdf_path=workdir / f"vyuka_plot_{y_range}.pdf")
-
-    from report import make_report
-    make_report(svg_plot, workdir / f"report_{y_range}.pdf")
+    predmet_akce = get_studenti(stag_client, rozvrhove_akce, predmety)
+    return predmet_akce, programy
