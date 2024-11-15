@@ -144,13 +144,15 @@ KENs ={
 
 # Katedra: Fakulta
 katedra_faculty_dict = dict([
-    ("KMP", 2), ("KSP", 2), ("KMT", 2), ("KEZ", 2), ("KKY", 2), ("KST", 2), ("KOM", 2), ("KVM", 2), ("KSR", 2),
+    ("KSA", 2), ("KMP", 2), ("KSP", 2), ("KMT", 2), ("KEZ", 2), ("KKY", 2), ("KST", 2), ("KOM", 2), ("KVM", 2), ("KSR", 2),
     ("KTS", 2), ("KVS", 2), ("DFS", 2), ("KPE", 3), ("KIN", 3), ("KSY", 3), ("KFÚ", 3), ("KMG", 3), ("KCJ", 3),
     ("KEK", 3), ("KPO", 3), ("DFE", 3), ("KTT", 4), ("KMI", 4), ("KHT", 4), ("KOD", 4), ("KNT", 4), ("KDE", 4),
     ("DFT", 4), ("KFL", 5), ("KPP", 5), ("KMD", 5), ("KSS", 5), ("KCH", 5), ("KFY", 5), ("KRO", 5), ("KAP", 5),
-    ("KGE", 5), ("KPV", 5), ("KRO", 5), ("KHI", 5), ("KAJ", 5), ("KTV", 5), ("KNJ", 5), ("KCL", 5), ("DFP", 5),
-    ("CPP", 5), ("KVU", 6), ("KPS", 6), ("KNK", 6), ("KUR", 6), ("KAR", 6), ("KDA", 6), ("KED", 6), ("DFA", 6),
-    ("ITE", 7), ("MTI", 7), ("NTI", 7), ("DFM", 7), ("UZS", 8)
+    ("KGE", 5), ("KPV", 5), ("KHI", 5), ("KAJ", 5), ("KTV", 5), ("KNJ", 5), ("KCL", 5), ("DFP", 5),
+    ("CPP", 5), ("KUM", 6), ("KVU", 6), ("KPS", 6), ("KNK", 6), ("KUR", 6), ("KAR", 6), ("KDA", 6), ("KED", 6), ("DFA", 6),
+    ("ITE", 7), ("MTI", 7), ("NTI", 7), ("DFM", 7), ("UZS", 8), ("KGD",5), ("KJN", 5), ("KMA", 5), ("KBE", 5),
+    ("FZS", 8)
+
 ])
 
 # fakulta kod: fakulta zkratka

@@ -136,18 +136,18 @@ def plot_vyuka_df(df: pd.DataFrame, podily_predmetu, pdf_path):
     height = bars[0].get_height()
     bars = [bar for bar in bars if np.isclose(bar.get_height(), height)]
     # bars = ax.patches
-    # # Check that the number of bars matches the number of data points
-    # assert len(bars) == len(plotting_df), f"Mismatch between bars ({len(bars)}) data points ({len(df)})."
-    #
-    # # Define a function to map 'naklady_estimate' to an edge color
-    # # def edgecolor_mapper(naklady_estimate):
-    # #     return 'red' if naklady_estimate else 'none'
-    #
-    # # Loop through the bars and set edge colors
-    # for bar, (_, row) in zip(sorted(bars, key=lambda x:x.get_y()), plotting_df.iterrows()):
-    #     if row['naklady_estimate']:
-    #         bar.set_edgecolor('red')
-    #         bar.set_linewidth(1.0)
+    # Check that the number of bars matches the number of data points
+    assert len(bars) == len(plotting_df), f"Mismatch between bars ({len(bars)}) data points ({len(df)})."
+
+    # Define a function to map 'naklady_estimate' to an edge color
+    # def edgecolor_mapper(naklady_estimate):
+    #     return 'red' if naklady_estimate else 'none'
+
+    # Loop through the bars and set edge colors
+    for bar, (_, row) in zip(sorted(bars, key=lambda x:x.get_y()), plotting_df.iterrows()):
+        if row['naklady_estimate']:
+            bar.set_edgecolor('red')
+            bar.set_linewidth(1.0)
 
     # Get positions and labels
     positions = ax.get_yticks()

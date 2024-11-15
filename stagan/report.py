@@ -26,6 +26,8 @@ md_text = """
 - **počet studentů** : počet studentů k 31.10. (s drobnými opravami)
 - **normativ** : příjem na jednoho normativního studenta pro rok 2024 (=44 000 Kč)
 - předměty jsou seřazeny sestupně podle průměru přes roky; Inf a NaN hodnoty viz níže.
+- pro červeně orámované (položené) sloupce nebyl předmět nalezen v rozpučtu FM za příslušný rok a náklady jsou tak odhadnuty na základě
+  dat o rozvrhových akcích ve STAGu
 
 # Poznámky
 
@@ -33,8 +35,6 @@ md_text = """
 - *odhad počtu hodin* je převzatý z rozpočtů FM, ale tam občas chybí předměty, které byly vyučované (podle STAGu)
 - chybí kontrola počtu hodin v rozpočtu FM vůči STAGu, zároveň rozpočet FM obsahuje dílčí korekce oproti údajům ve STAGu
 - některé předměty rozvrhových akcí nejsou STAGem reportovány u žádného oboru; tyto předměty ve výpisu chybí
-- pokud není v daném roce předmět nalezen v rozpočtu FM j emu přiřazen nulový počet hodin
-- *příjem na hodinu* je nastaven na maximum rozsahu grafu pokud je předmět vyučován podle STAGu, ale má nulový počet odučených hodin podle rozpočtu
 - *příjem na hodinu* je nastaven na NaN a ignorován při výpočtu průměru přes roky pokud je příjem i počet hodin nulový
 """
 

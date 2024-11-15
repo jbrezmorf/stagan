@@ -7,13 +7,13 @@ import requests
 import attrs
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, Optional
-import yaml
+from tools import pretty_print_yaml
 import pandas as pd
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 from tqdm import tqdm
-from tables import KENs
+from tables import KENs, katedra_faculty_dict, facoulty_abr
 
 #from funpy import memoize, MemoizeCfg
 import pathlib
@@ -423,7 +423,7 @@ def semestr_dict(predmet_dict):
 @mem.cache
 def get_predmety(stag_client, obory:List[StudijniObor], roky: List[int]):
     predmety = []
-    for obor in obory:
+    for obor in tqdm(obory, desc='predmety'):
         for rok in roky:
             od, do = obor.platnyOd, obor.akreditaceDoDate
             if od is None:
@@ -499,34 +499,50 @@ def tydny_guess(ra):
 class PredmetAkce:
     """
     Combine Predmet and RozvrhovaAkce and student ids.
+    TODO:
+    - remove _predmety from dict representation, used in yaml,
+      not sure what is called
     """
+
     rok: int
     katedra: str
     zkratka: str
-    _predmety: Dict[PredmetIdx, Predmet] = attrs.field(repr=False, init=False)
-    students: Dict[int, Set[str]]
+    kreditu: float
+    rozsah_tuple: Tuple[str, str, str]
+    #_predmety: Dict[PredmetIdx, Predmet] = attrs.field(repr=False, metadata={'serialize': False})
+    students: Dict[int, Set[str]]   # program_id -> set of student_ids
     akce: List[Dict[str, Any]] = attrs.field(factory=lambda : [{}, {}, {}])  # rozvrhove akce
+
     n_per_tyd = {'K': 2, 'L': 1, 'S': 1, 'J': 0}
     ra_types = ['Př', 'Cv','Sem']
     ra_types_resolve = {ra_type: i for i, ra_type in enumerate(ra_types)}
+
+    @staticmethod
+    def common(set_vals):
+        assert len(set_vals) == 1
+        return next(iter(set_vals))
+
+
+    @classmethod
+    def from_predmet(cls, predmety_all: Dict[PredmetIdx, Predmet], idx, prog_ids):
+        r, k, z = idx
+        predmety = [predmety_all[(r, k, z, prog_id)] for prog_id in prog_ids]
+        rozsah_tuple = cls.common({p.rozsah_tuple for p in predmety})
+        kreditu = cls.common({p.kreditu for p in predmety})
+        students = {prog_id: set() for prog_id in prog_ids}
+        return cls(r, k, z, kreditu, rozsah_tuple, students)
 
     @property
     def label(self):
         return f"{self.katedra}/{self.zkratka}"
 
-    def predmet(self, prog_id):
-        return self._predmety[(self.rok, self.katedra, self.zkratka, prog_id)]
-
-    @property
-    def predmety(self):
-        return (self.predmet(prog_id) for prog_id in self.students.keys())
-
     def vazeny_studento_kredit(self, prg_id, fakulty_KEN):
         n_students = len(self.students[prg_id])
-        predmet = self.predmet(prg_id)
-        return n_students * predmet.kreditu * fakulty_KEN[predmet.fakulta_programu]
+        fakulta_katedry = facoulty_abr[katedra_faculty_dict[self.katedra]]
+        return n_students * self.kreditu * fakulty_KEN[fakulta_katedry]
 
     def union_students(self, prog_id, students):
+        self.students.setdefault(prog_id, set())
         self.students[prog_id] = self.students[prog_id].union(students)
 
     def add_ra(self, ra: 'RozvrhovaAkce'):
@@ -534,12 +550,6 @@ class PredmetAkce:
         ra_dict = self.akce[i_ra_type]
         ra_dict.setdefault(ra.krouzky, set())
         ra_dict[ra.krouzky].add(ra)
-
-    @cached_property
-    def rozsah_tuple(self):
-        rozsah_set = {p.rozsah_tuple for p in self.predmety}
-        assert len(rozsah_set) == 1
-        return next(iter(rozsah_set))
 
     def _n_hodin(self, i_ra_type):
         """
@@ -620,7 +630,7 @@ class PredmetAkce:
 def get_rozvrh(stag_client, katedry: List[str], years: List[int]) -> Dict[int, RozvrhovaAkce]:
     rozvrh = []
 
-    for katedra in tqdm(katedry):
+    for katedra in tqdm(katedry, desc='rozvrh'):
         for rok in years:
             for semestr in ['ZS', 'LS']:
                 # Example 1: Get schedule by department
@@ -666,10 +676,8 @@ def get_studenti(stag_client, akce: Dict[int, RozvrhovaAkce],
     predmety_ = {}
     for r,k,z,p in predmety.keys():
         predmety_.setdefault( (r,k,z), set()).add(p)
-    def dict_from_set(programs: Set[int]) -> Dict[int, Set[Any]]:
-        return {prg_id: set() for prg_id in programs}
-    predmety_akce = {(r,k,z): PredmetAkce(r, k, z, predmety, dict_from_set(prg_set))
-                     for (r,k,z), prg_set in predmety_.items()}
+    predmety_akce = {rkz: PredmetAkce.from_predmet(predmety, rkz, prg_set)
+                     for rkz, prg_set in predmety_.items()}
 
     missing_predmety = set()
     predmety_lock = Lock()
@@ -702,6 +710,11 @@ def get_studenti(stag_client, akce: Dict[int, RozvrhovaAkce],
                     continue
                 predmet_akce.union_students(prg_id, students)
                 predmet_akce.add_ra(ra)
+
+                # prg: 1277, 1267
+                # KMAGSW students from 1277  missing: P22000433 (Kombinovaná forma), P21000333 ('J')
+                # new ver. has 7, SATG: 9, [ new_ prg has 1, orig. prg. : has 27 ???]
+                # 2 students from 1267 lost, students dict finally with 1278 other prg
                 # except KeyError:
                 #     print(f"Unsupported typAkceZkr: {ra.typAkceZkr}, {ra.roakIdno}")
 
@@ -750,6 +763,7 @@ def read_stag(years, katedry=None):
     print(len(predmety))
 
     rozvrhove_akce = get_rozvrh(stag_client, katedry, years)
+    pretty_print_yaml(rozvrhove_akce, "rozvrhove_akce.yaml")
     #krouzky_kod = {k for ra in rozvrhove_akce.values() for k in ra.krouzky_list()}
     #print(krouzky_kod)
 
