@@ -1,5 +1,4 @@
 from typing import Dict, List, Tuple, Set
-import pathlib
 
 import numpy as np
 from tools import pretty_print_yaml
@@ -7,6 +6,7 @@ from stagan.stag import read_stag, VyukaPr, StudijniProgram, PredmetIdx, Predmet
 from tables import facoulty_abr, katedra_faculty_dict, KENs
 import attrs
 
+import pathlib
 script_dir = pathlib.Path(__file__).parent
 workdir = script_dir / "workdir"
 #MemoizeCfg.instance(cache_dir=script_dir / "funpy_cache")
@@ -72,66 +72,66 @@ def years_range(df):
         years = str(min_year)[2:] + "-" + str(max_year)[2:]
     return years
 
-def stag_derived_data(workdir, years, predmety_akce, programy):
-    rok_program_students = {}
-    sum_program_kredity = {}
-    normovanany_studenti = {}
-    predmety_podily_fakult = {}
-    fakulty_KEN = {}
-
-    for year in years:
-        n_prog_students_year = rok_program_students.setdefault(year, {})
-        sum_kredity_year = sum_program_kredity.setdefault(year, {})
-        norm_stud_year = normovanany_studenti.setdefault(year, {})
-        prog_n_students = rok_program_students[year]
-        # Compute average KEN of programs of each facoulty, weighted by students on a program
-        year_f_KEN = fakulty_KEN.setdefault(year, {})
-        for f in facoulty_abr.values():
-            KEN_students = [(p.koefEkonomickeNarocnosti, ns)
-                            for p, ns in zip(programy.values(), prog_n_students)
-                            if p.fakulta == f]
-            KEN, N = zip(*KEN_students)
-            year_f_KEN[f] = float(np.average(KEN, weights=N))
-        print(f"[{year}] fakulty KEN:", year_f_KEN)
-
-
-        for pa in predmety_akce.values():
-            #p = p_akce.predmet
-            if not pa.rok == year:
-                continue
-            #if p.fakulta_programu == 'CDV':
-            #    continue
-            for prg_id, students_set in pa.students.items():
-                prg_kod = programy[prg_id].kod
-                prg_set = n_prog_students_year.setdefault(prg_kod, set())
-                n_prog_students_year[prg_kod] = prg_set.union(students_set)
-
-                katedro_program = (pa.katedra, prg_kod)
-                sum_kredity_year.setdefault(katedro_program, 1e-6)
-                vazeny_st_kredit = pa.vazeny_studento_kredit(prg_id, year_f_KEN)
-                sum_kredity_year[katedro_program] += float(vazeny_st_kredit)    # just to be sure
-                predmet_tag = pa.label
-
-                podily_predmetu = predmety_podily_fakult.setdefault(predmet_tag, {})
-                cilova_fakulta = programy[prg_id].fakulta
-                podily_predmetu.setdefault(cilova_fakulta, 1e-6)
-                podily_predmetu[cilova_fakulta] += float(vazeny_st_kredit)
-
-        # students per program, normalized students per program
-        for prg_kod in n_prog_students_year.keys():
-            n_stud = n_prog_students_year[prg_kod] = len(n_prog_students_year[prg_kod])
-            norm_stud_year[prg_kod] = n_stud * KENs[prg_kod]
-
-        # print programm codes and n_students
-        #skp = {(k, programy[i_pr].kod): float(sk) for (k , i_pr), sk in sum_studento_kredity.items()}
-        pretty_print_yaml(sum_kredity_year, fname=workdir / f"studento_kredity_{year}.yaml")
-        #programy_n_students = {programy[prg_id].kod: ns for prg_id, ns in prog_n_students.items()}
-        pretty_print_yaml(prog_n_students, fname=workdir / f"programy_n_students_{year}.yaml")
-        #norm_prog_students = {programy[prg_id].kod: float(ns) for prg_id, ns in norm_stud.items()}
-        pretty_print_yaml(norm_stud_year, fname=workdir / f"norm_students_{year}.yaml")
-
-    pretty_print_yaml(predmety_podily_fakult, fname=workdir / "predmety_podily_fakult.yaml")
-    return sum_program_kredity, normovanany_studenti, predmety_podily_fakult, fakulty_KEN
+# def stag_derived_data(workdir, years, predmety_akce, programy):
+#     rok_program_students = {}
+#     sum_program_kredity = {}
+#     normovanany_studenti = {}
+#     predmety_podily_fakult = {}
+#     fakulty_KEN = {}
+#
+#     for year in years:
+#         n_prog_students_year = rok_program_students.setdefault(year, {})
+#         sum_kredity_year = sum_program_kredity.setdefault(year, {})
+#         norm_stud_year = normovanany_studenti.setdefault(year, {})
+#         prog_n_students = rok_program_students[year]
+#         # Compute average KEN of programs of each facoulty, weighted by students on a program
+#         year_f_KEN = fakulty_KEN.setdefault(year, {})
+#         for f in facoulty_abr.values():
+#             KEN_students = [(p.koefEkonomickeNarocnosti, ns)
+#                             for p, ns in zip(programy.values(), prog_n_students)
+#                             if p.fakulta == f]
+#             KEN, N = zip(*KEN_students)
+#             year_f_KEN[f] = float(np.average(KEN, weights=N))
+#         print(f"[{year}] fakulty KEN:", year_f_KEN)
+#
+#
+#         for pa in predmety_akce.values():
+#             #p = p_akce.predmet
+#             if not pa.rok == year:
+#                 continue
+#             #if p.fakulta_programu == 'CDV':
+#             #    continue
+#             for prg_id, students_set in pa.students.items():
+#                 prg_kod = programy[prg_id].kod
+#                 prg_set = n_prog_students_year.setdefault(prg_kod, set())
+#                 n_prog_students_year[prg_kod] = prg_set.union(students_set)
+#
+#                 katedro_program = (pa.katedra, prg_kod)
+#                 sum_kredity_year.setdefault(katedro_program, 1e-6)
+#                 vazeny_st_kredit = pa.vazeny_studento_kredit(prg_id, year_f_KEN)
+#                 sum_kredity_year[katedro_program] += float(vazeny_st_kredit)    # just to be sure
+#                 predmet_tag = pa.label
+#
+#                 podily_predmetu = predmety_podily_fakult.setdefault(predmet_tag, {})
+#                 cilova_fakulta = programy[prg_id].fakulta
+#                 podily_predmetu.setdefault(cilova_fakulta, 1e-6)
+#                 podily_predmetu[cilova_fakulta] += float(vazeny_st_kredit)
+#
+#         # students per program, normalized students per program
+#         for prg_kod in n_prog_students_year.keys():
+#             n_stud = n_prog_students_year[prg_kod] = len(n_prog_students_year[prg_kod])
+#             norm_stud_year[prg_kod] = n_stud * KENs[prg_kod]
+#
+#         # print programm codes and n_students
+#         #skp = {(k, programy[i_pr].kod): float(sk) for (k , i_pr), sk in sum_studento_kredity.items()}
+#         pretty_print_yaml(sum_kredity_year, fname=workdir / f"studento_kredity_{year}.yaml")
+#         #programy_n_students = {programy[prg_id].kod: ns for prg_id, ns in prog_n_students.items()}
+#         pretty_print_yaml(prog_n_students, fname=workdir / f"programy_n_students_{year}.yaml")
+#         #norm_prog_students = {programy[prg_id].kod: float(ns) for prg_id, ns in norm_stud.items()}
+#         pretty_print_yaml(norm_stud_year, fname=workdir / f"norm_students_{year}.yaml")
+#
+#     pretty_print_yaml(predmety_podily_fakult, fname=workdir / "predmety_podily_fakult.yaml")
+#     return sum_program_kredity, normovanany_studenti, predmety_podily_fakult, fakulty_KEN
 
 
 def predmet_body_rozpocet(predmet: PredmetAkce, rozpocet_df:Dict[int, pd.DataFrame]):
@@ -196,8 +196,13 @@ def facoulty_KENs(year_prog_students, programy):
 
     return year_facoulty_to_ken, kod_to_KEN, kod_to_fakulta, prg_n_students
 
-
-def union_students(data):
+PredmetPrgId = Tuple[int, str, str, int]
+def union_students(data: List[Tuple[PredmetPrgId, Set[str]]]):
+    """
+    Create student sets on (rok, katedra, predmet, program_id) indices
+    :param data:
+    :return:
+    """
     result_dict = {}
     for idx, students in data:
         # Use (rok, katedra, zkratka) as the key and add the students set to the existing set
@@ -206,12 +211,32 @@ def union_students(data):
 
     return result_dict
 
+def group_sets(pair_list):
+    set_dict = {}
+    for idx, val in pair_list:
+        idx_set = set_dict.setdefault(idx, set())
+        idx_set.update([val])
+    return set_dict
+
+def label_for_pa_set(pa_set):
+    katedra_sets = group_sets([(katedra, zkratka) for n, katedra, zkratka in sorted(pa_set)])
+    label_lines = [katedra + '/' + '+'.join(zkratka_set) for katedra, zkratka_set in katedra_sets.items()]
+    return ' | '.join(label_lines)
+
 
 #@mem.cache
 def make_plot_df(years, plot_katedry):
-    predmet_akce, programy = read_stag(years, katedry=None)
+    predmet_akce, rozvrhove_akce, programy = read_stag(years, katedry=None)
     # predmet_akce = {i: p for i, p in predmet_akce.items()
     #                 if not (p.fakulta_programu == 'CDV') }
+
+    # Prepare for grouping of RA in same space-time
+    space_time_pa_list = [(ra.space_time, (ra.obsazeni, ra.katedra, ra.predmet))   for ra in rozvrhove_akce.values()]
+    space_time = group_sets(space_time_pa_list)
+    label_dict_rev = {label_for_pa_set(pa_set): pa_set for pa_set in space_time.values()}
+    label_dict = { (katedra, zkratka): label
+        for label, pa_set in label_dict_rev.items()
+        for n_students, katedra, zkratka in pa_set}
 
     year_prog_students = students_on_programs(predmet_akce, programy)
     year_facoulty_KEN, kod_to_KEN, kod_to_fakulta, prg_n_students = facoulty_KENs(year_prog_students, programy)
@@ -242,7 +267,7 @@ def make_plot_df(years, plot_katedry):
     df['studento_kredit'] = df['n_students'] * df['kredits'] * df['katedra_KEN']
     df['prg_norm_students'] = df['prg_KEN'] * df['prg_n_students']
     df = df[df['studento_kredit'] > 0]
-    df['label'] = df['katedra'] + '/' + df['zkratka']
+    df['label'] = df.apply(lambda row: label_dict.get((row['katedra'], row['zkratka']), None), axis=1)
 
     sk_kzf = df.groupby(['label', 'fac_of_prg'])['studento_kredit'].sum().rename('sk_kzf').reset_index()
     sk_kz = df.groupby(['label'])['studento_kredit'].sum().rename('sk_kz').reset_index()
@@ -267,12 +292,14 @@ def make_plot_df(years, plot_katedry):
         pretty_print_yaml(df.copy().reset_index().to_dict(orient='records'), fname=f'rozpocet_{year}.yaml')
 
     rozpocet_errors = []
+
     def make_item(pa: PredmetAkce):
         naklady_rozpocet = predmet_body_rozpocet(pa, rozpocet_df)
         naklady_merge, naklady_estimate, error = vyuka_merge(pa, naklady_rozpocet)
         if error is not None:
             rozpocet_errors.append(error)
         return (pa.rok, pa.katedra, pa.zkratka, naklady_merge, naklady_estimate)
+
     df_naklady = pd.DataFrame()
     df_naklady['rok'], df_naklady['katedra'], df_naklady['zkratka'], df_naklady['rel_naklady'], df_naklady['naklady_estimate'] = zip(*[
         make_item(p_akce) for p_akce in predmet_akce.values()
@@ -298,13 +325,11 @@ def make_plot_df(years, plot_katedry):
     pretty_print_yaml(df, fname=workdir / "vyuka_wide_plot.csv")
 
     # aggregate all programs of predmet to single item
-    def check_common_value(series):
-        if series.nunique() == 1:
-            return series.iloc[0]
-        else:
-            return '+'.join((str(it) for it in series))  # Indicator for differing values
-    df.reset_index()
-    df_grouped = df.groupby(level=df.index.names)
+    # def check_common_value(series):
+    #     if series.nunique() == 1:
+    #         return series.iloc[0]
+    #     else:
+    #         return '+'.join((str(it) for it in series))  # Indicator for differing values
 
     # def has_multiple_values(columns):
     #     def _has_multiple_values(group):
@@ -317,8 +342,12 @@ def make_plot_df(years, plot_katedry):
                      'rel_prijmy': 'sum',
                      'rel_naklady': 'max',
                      'naklady_estimate': 'max',
-                     'label': 'first',
+                     'katedra': 'first',
+                     'zkratka': 'first'
                      }
+    df.reset_index(inplace=True)
+    df.set_index(["label", "rok"], inplace=True)
+    df_grouped = df.groupby(level=df.index.names)
     aggregated_df = df_grouped.agg(agg_functions)
     aggregated_df.reset_index(inplace=True)
     pretty_print_yaml(aggregated_df, fname=workdir / "vyuka_eff_plot.csv")

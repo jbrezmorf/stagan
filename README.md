@@ -41,7 +41,17 @@ idx: year, katedra, zkratka -> n_hod_pr, n_hod_cv, n_hod_sem, n_par_cv, body
   - to je patrně více než má rektorátní rozpočet
 
 - 15.11.
-  - rozsah obsahuje občas cifru s písmenem: 5T, 7T, 5S, 5D; objevuje se to jak u  Cv tak u Př   
+  - rozsah obsahuje občas cifru s písmenem: 5T, 7T, 5S, 5D; objevuje se to jak u  Cv tak u Př
+    Tůma: písmena asi bez jednotného významu, T(týdně), S(za semestr), D??
+  - typAkceZkr: Zkouška (předmět 2021 NTI/MFD*
+  - 
+
+Předměty 2024, typ týden Jiný:
+NTI/DSI "Diplomový seminář",7-16, Cv
+NTI/APMO "Aplikace počítčových modelů", 7-16, Př
+NTI/KM "Kalibrace modelů"
+NTI/TZS*Z "Tomoggrafické zobrazovací systémy", 7-13, Cv
+  
 Implementation:
 - The functional style is used in order to use effective persistent memoization using joblib.
 - Functional means we prefere definition of dataclasses and functions transforming one data to other rather then modify them.

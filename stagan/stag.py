@@ -190,10 +190,9 @@ def initialize_from_dict(cls, *dicts):
     try:
         instance = cls(**filtered_data)
     except TypeError as e:
-        print(e)
         print("Input Dict:")
-        #pretty_print_yaml(list(dicts))
-        return None
+        pretty_print_yaml(list(dicts))
+        raise e
     return (instance.idx(), instance)
 
 def is_pair(value):
@@ -445,11 +444,17 @@ class RozvrhovaAkce:
     katedra: str
     predmet: str    # zkratka
     rok: int = attrs.field(converter=int)
-    obsazeni: int   # pocet studentu na akci
-    typAkceZkr: str     # CV, Pr,
     semestr: str        # ZS, LS
-    tydenZkr: str       # K (Každý), S (sudý), L (lichý), J (Jiný, kombinované)
+    platnost: str       # A, B (A = platná, B = blokovaná)
+    budova: str
+    mistnost: str
+    denZkr: str
+    hodiny: Tuple[int, int]                         # hodinaOd, hodinaDo
+    obsazeni: int  = attrs.field(converter=int)     # pocet studentu na akci
+    typAkceZkr: str     # CV, Pr,
+    tydenZkr: str       # K (Každý), S (sudý), L (lichý), J (Jiný, chaos!)
     tydny: Tuple[int, int]      # Od, Do
+    datum: Tuple[str, str]      # Od, Do
     krouzky: str
 
     def __hash__(self):
@@ -465,12 +470,11 @@ class RozvrhovaAkce:
         return self.krouzky.split(',')
 
     def is_fake(self):
-        if self.obsazeni == 0:
-            return True
-        if self.tydenZkr == 'J':
-            return True
-        return False
+        return (self.obsazeni == 0) or (self.mistnost is None) or (self.budova is None)
 
+    @property
+    def space_time(self):
+        return (self.rok, self.semestr, self.budova, self.mistnost, self.denZkr, self.hodiny, self.tydenZkr, self.tydny)
 
 @dataclass
 class GetRozvrhByKatedraRequest:
@@ -489,11 +493,23 @@ class GetRozvrhByKatedraRequest:
     call_name: str = 'getRozvrhByKatedra'
 
 
+def int_pair(a, b):
+    if a == None or b == None:
+        return  None
+    else:
+        return (int(a), int(b))
+
 def tydny_guess(ra):
     pair = (ra['tydenOd'], ra['tydenDo'])
-    return {'tydny': pair}
+    return {'tydny': int_pair(*pair)}
 
+def hodiny_guess(ra):
+    pair = (ra['hodinaOd'], ra['hodinaDo'])
+    return {'hodiny': int_pair(*pair)}
 
+def datum_guess(ra):
+    pair = (ra['datumOd'], ra['datumDo'])
+    return {'datum': pair}
 
 @attrs.define
 class PredmetAkce:
@@ -513,7 +529,7 @@ class PredmetAkce:
     students: Dict[int, Set[str]]   # program_id -> set of student_ids
     akce: List[Dict[str, Any]] = attrs.field(factory=lambda : [{}, {}, {}])  # rozvrhove akce
 
-    n_per_tyd = {'K': 2, 'L': 1, 'S': 1, 'J': 0}
+    n_per_tyd = {'K': 2, 'L': 1, 'S': 1, 'J': 2}
     ra_types = ['Př', 'Cv','Sem']
     ra_types_resolve = {ra_type: i for i, ra_type in enumerate(ra_types)}
 
@@ -602,6 +618,7 @@ class PredmetAkce:
             n_tydnu = 0
         return n_parallel, rozsah, n_tydnu
 
+
     @property
     def n_students(self):
         return sum((len(s) for s in self.students.values()))
@@ -636,7 +653,8 @@ def get_rozvrh(stag_client, katedry: List[str], years: List[int]) -> Dict[int, R
                 # Example 1: Get schedule by department
                 rozvrh_request = GetRozvrhByKatedraRequest(katedra, rok, semestr)
                 ra_res = stag_call(stag_client, rozvrh_request)['rozvrhovaAkce']
-                add = [initialize_from_dict(RozvrhovaAkce, ra, tydny_guess(ra)) for ra in ra_res]
+                pretty_print_yaml(ra_res, fname=f'rozvrh_{rok}_{katedra}_{semestr}.yaml')
+                add = [initialize_from_dict(RozvrhovaAkce, ra, tydny_guess(ra), datum_guess(ra), hodiny_guess(ra)) for ra in ra_res]
                 filter_fake_actions = [(i, ra) for i, ra in add if not ra.is_fake()]
                 extend_valid(rozvrh, filter_fake_actions)
     return dict(rozvrh)
@@ -769,4 +787,4 @@ def read_stag(years, katedry=None):
 
     # update 'n_students, n_cv, n_pr' in Predmety
     predmet_akce = get_studenti(stag_client, rozvrhove_akce, predmety)
-    return predmet_akce, programy
+    return predmet_akce, rozvrhove_akce, programy
