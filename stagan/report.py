@@ -28,10 +28,11 @@ md_text = """
 - předměty jsou seřazeny sestupně podle průměru přes roky; Inf a NaN hodnoty viz níže.
 - pro červeně orámované (položené) sloupce nebyl předmět nalezen v rozpučtu FM za příslušný rok a náklady jsou tak odhadnuty na základě
   dat o rozvrhových akcích ve STAGu
+- heuristicky se detekují předměty vyučované najednou a jsou uvedeny v jednom řádku
 
 # Poznámky
 
-- zdrojem je především webové rozhraní STAGu
+- zdrojem je především REST rozhraní STAGu
 - *odhad počtu hodin* je převzatý z rozpočtů FM, ale tam občas chybí předměty, které byly vyučované (podle STAGu)
 - chybí kontrola počtu hodin v rozpočtu FM vůči STAGu, zároveň rozpočet FM obsahuje dílčí korekce oproti údajům ve STAGu
 - některé předměty rozvrhových akcí nejsou STAGem reportovány u žádného oboru; tyto předměty ve výpisu chybí

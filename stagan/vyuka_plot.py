@@ -203,11 +203,7 @@ def plot_vyuka_df(df: pd.DataFrame, podily_predmetu, pdf_path):
             # Move start position to end of this segment
             y0 = y1
 
-    ax.set_xlabel('příjem na hodinu výuky (předmětu). [tis. Kč]')
-    ax.set_ylabel('katedra / predmet / fakulta programu ')
-    ax.set_xlim(0, normativ * 0.5 / 1000)
-    ax.set_title('Příjmy na hodinu výuky předmětů na FM')
-
+    #
     # average fraction on FM
     total_frac = lambda  df : df['rel_prijmy'].sum() / df['rel_naklady'].sum() * normativ / 1000
     fm_fraction = total_frac(df)
@@ -221,8 +217,28 @@ def plot_vyuka_df(df: pd.DataFrame, podily_predmetu, pdf_path):
     for ustav, c in zip(ustavy, ['magenta', 'cyan', 'blue']):
         ustav_x = total_frac(df[df['katedra'] == ustav])
         vline(ustav_x, c, ustav+ " avg.", linestyle='dashed', linewidth=1.0)
+
+    # Calculate quartile ranges based on tick positions
+    q1 = np.percentile(positions, 25)
+    q2 = np.percentile(positions, 50)  # Median
+    q3 = np.percentile(positions, 75)
+    q4 = max(positions)
+    # Add axvspan regions to the background (before plotting any data)
+    ax.axhspan(q1, q2, facecolor='#E5E5F5', zorder=0)  # zorder=0 ensures it is in the background
+    ax.axhspan(q2, q3, facecolor='#DDDDEE', zorder=0)
+    ax.axhspan(q3, q4, facecolor='#D5D5E5', zorder=0)
+
     # Customize the plot using the axis object
-    ax.legend(loc='upper right')  #bbox_to_anchor=(1.05, 1),
+    # Add top x-axis with a label
+    x_ax_label = 'příjem na hodinu výuky (předmětu). [tis. Kč]'
+    ax.set_xlabel(x_ax_label)
+
+    ax.set_ylabel('katedra / predmet / fakulta programu ')
+    ax.set_ylim( max(positions), min(positions) - 6)
+    ax.set_xlim(0, normativ * 0.5 / 1000)
+    ax.set_title('Příjmy na hodinu výuky předmětů na FM [tis. Kč]', pad = 20)
+    ax.tick_params(axis='x', which='both', top=True, bottom=True, labeltop=True, labelbottom=True)
+    ax.legend(loc='upper left')  #bbox_to_anchor=(1.05, 1),
 
     fig.tight_layout()
     fig.savefig(pdf_path, bbox_inches='tight')

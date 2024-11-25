@@ -224,7 +224,7 @@ def label_for_pa_set(pa_set):
     return ' | '.join(label_lines)
 
 
-#@mem.cache
+@mem.cache
 def make_plot_df(years, plot_katedry):
     predmet_akce, rozvrhove_akce, programy = read_stag(years, katedry=None)
     # predmet_akce = {i: p for i, p in predmet_akce.items()
